@@ -1,0 +1,6 @@
+Extraction baseline: kernel mainline-6.18 at 5b501da414fdc6bc2ef8e37f7178396ae67b490e
+Original commit mapping: companion kernel Documentation/android/patch-provenance.json
+Source licenses/copyrights and imported commit authors/dates are retained.
+
+1238df98ae5665ecfdb5f6b238d0f14689f1107c SzczurekYT <szczurek@szczurek.yt> drivers: gpu: drm: panel: Add Samsung S6E8FCO
+2dcd56e5db77c98f365313020ce60d9cd7b9813c vishwajithkv <vishwajithkv@users.noreply.github.com> Import ACK baseline for Mi A3 modules
