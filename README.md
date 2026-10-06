@@ -1,13 +1,13 @@
 # Mi A3 6.18 external kernel modules
 
-The optional Samsung S6E8FCO panel driver is maintained under panel/ with its
+The optional Samsung S6E8FCO panel driver is maintained under qcom/opensource/display-drivers/panel/ with its
 original license, copyright and attributed commit history. Kbuild compiles it
 only when CONFIG_DRM_PANEL_SAMSUNG_S6E8FCO=m. Its configuration dependencies
 remain in the kernel; the option cannot be selected built-in after extraction.
 The current SimpleDRM profile keeps it disabled and module load lists empty.
 
 BoardConfigModules.mk uses Lineage's TARGET_KERNEL_EXT_MODULE_ROOT and
-TARGET_KERNEL_EXT_MODULES with panel:kbuild. Lineage builds against the same
+TARGET_KERNEL_EXT_MODULES with qcom/opensource/display-drivers/panel:kbuild. Lineage builds against the same
 kernel output, installs into the common staging directory and generates the
 combined module dependency metadata for vendor packaging. Do not introduce
 prebuilt or mismatched modules.
