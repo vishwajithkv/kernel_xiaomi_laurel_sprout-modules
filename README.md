@@ -21,3 +21,9 @@ and subsystem patches remain in ACK until independently modularized.
 Companions: sm6125-mainline-6.18 and sm6125-mainline-6.18-devicetrees.
 This split awaits a maintainer build and boot check. See the kernel's
 Documentation/android/SPLIT_SOURCES.md and IMPORT_HISTORY.txt.
+
+Native-profile status (2026-10-06): the ROM packages the freshly built Samsung
+panel module in recovery-as-boot and vendor. The maintainer's build #15 has
+working native physical scanout; live Settings scrolling confirms hardware
+composition. No panel-driver source change was needed for this milestone.
+Do not commit generated .ko, .o, .mod or Kbuild command files.
