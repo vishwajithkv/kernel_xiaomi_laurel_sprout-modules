@@ -27,3 +27,32 @@ panel module in recovery-as-boot and vendor. The maintainer's build #15 has
 working native physical scanout; live Settings scrolling confirms hardware
 composition. No panel-driver source change was needed for this milestone.
 Do not commit generated .ko, .o, .mod or Kbuild command files.
+
+Build #17 recovery investigation: initial panel commands now succeed after
+the companion kernel's controller quiesce change, but the first high-speed
+brightness command times out and the screen stays black. The exact Laurel
+4.14 panel description requests delay_until_first_frame for brightness.
+The next source candidate waits 20 ms in panel enable, after host video
+startup and before DRM enables the backlight. This is a frame-interval delay,
+not a vblank synchronization guarantee. Brightness read/write callbacks now
+restore their original DSI mode flags on both success and failure.
+High-speed brightness mode is retained, matching the downstream description.
+These module edits have not been compiled or device validated; rebuild the
+module packaged in both recovery and vendor, and inspect the first brightness
+transfer and physical recovery display. See NATIVE_GRAPHICS.md for logs and
+the separately validated MDSS reset workaround.
+
+The maintainer reports the synchronous 20 ms candidate still has black
+recovery and delayed Android output. The installed vendor panel module hash
+matches the local rebuilt module. MSM commit-tail enables bridges before
+flush_commit kicks off the frame: sleeping inside panel enable delays the
+frame as well. The revised candidate schedules the initial brightness update
+on delayed work instead, allowing enable to return. Early brightness updates
+are deferred; the worker applies the current backlight state. Disable/removal
+cancel the work synchronously. The 20 ms interval is still a scheduling
+heuristic, not a hardware first-frame completion guarantee. This revision
+was initially uncompiled. The latest maintainer build reports working recovery
+through the companion kernel's SimpleDRM fallback, but Android's display
+transition delay remains. That fallback does not bind this panel driver;
+recovery success does not validate the delayed-brightness change. No new
+device logs isolate its effect on native Android output.

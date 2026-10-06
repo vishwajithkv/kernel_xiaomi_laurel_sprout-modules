@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/regulator/consumer.h>
+#include <linux/workqueue.h>
 
 #include <video/mipi_display.h>
 
@@ -22,6 +23,8 @@ struct s6e8fco_samsungp {
 	struct mipi_dsi_device *dsi;
 	struct regulator_bulk_data supplies[3];
 	struct gpio_desc *reset_gpio;
+	struct delayed_work brightness_work;
+	bool brightness_ready;
 };
 
 static inline
@@ -148,8 +151,47 @@ static int s6e8fco_samsungp_get_modes(struct drm_panel *panel,
 	return drm_connector_helper_get_modes_fixed(connector, &s6e8fco_samsungp_mode);
 }
 
+static void s6e8fco_samsungp_brightness_work(struct work_struct *work)
+{
+	struct s6e8fco_samsungp *ctx = container_of(to_delayed_work(work),
+				struct s6e8fco_samsungp, brightness_work);
+	int ret;
+
+	WRITE_ONCE(ctx->brightness_ready, true);
+	ret = backlight_update_status(ctx->panel.backlight);
+	if (ret < 0)
+		dev_err(&ctx->dsi->dev, "Deferred brightness update failed: %d\n", ret);
+}
+
+static int s6e8fco_samsungp_enable(struct drm_panel *panel)
+{
+	struct s6e8fco_samsungp *ctx = to_s6e8fco_samsungp(panel);
+
+	/*
+	 * Laurel's downstream configuration delays brightness until the first
+	 * frame. MSM kicks off the frame after bridge enable returns, so do
+	 * not wait or send the initial brightness from this callback.
+	 */
+	WRITE_ONCE(ctx->brightness_ready, false);
+	schedule_delayed_work(&ctx->brightness_work, msecs_to_jiffies(20));
+
+	return 0;
+}
+
+static int s6e8fco_samsungp_disable(struct drm_panel *panel)
+{
+	struct s6e8fco_samsungp *ctx = to_s6e8fco_samsungp(panel);
+
+	cancel_delayed_work_sync(&ctx->brightness_work);
+	WRITE_ONCE(ctx->brightness_ready, false);
+
+	return 0;
+}
+
 static const struct drm_panel_funcs s6e8fco_samsungp_panel_funcs = {
 	.prepare = s6e8fco_samsungp_prepare,
+	.enable = s6e8fco_samsungp_enable,
+	.disable = s6e8fco_samsungp_disable,
 	.unprepare = s6e8fco_samsungp_unprepare,
 	.get_modes = s6e8fco_samsungp_get_modes,
 };
@@ -157,33 +199,36 @@ static const struct drm_panel_funcs s6e8fco_samsungp_panel_funcs = {
 static int s6e8fco_samsungp_bl_update_status(struct backlight_device *bl)
 {
 	struct mipi_dsi_device *dsi = bl_get_data(bl);
+	struct s6e8fco_samsungp *ctx = mipi_dsi_get_drvdata(dsi);
 	u16 brightness = backlight_get_brightness(bl);
+	unsigned long mode_flags = dsi->mode_flags;
 	int ret;
+
+	/* The worker applies the latest backlight state after frame kickoff. */
+	if (!READ_ONCE(ctx->brightness_ready))
+		return 0;
 
 	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
 
 	ret = mipi_dsi_dcs_set_display_brightness_large(dsi, brightness);
-	if (ret < 0)
-		return ret;
+	dsi->mode_flags = mode_flags;
 
-	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
-
-	return 0;
+	return ret < 0 ? ret : 0;
 }
 
 static int s6e8fco_samsungp_bl_get_brightness(struct backlight_device *bl)
 {
 	struct mipi_dsi_device *dsi = bl_get_data(bl);
 	u16 brightness;
+	unsigned long mode_flags = dsi->mode_flags;
 	int ret;
 
 	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
 
 	ret = mipi_dsi_dcs_get_display_brightness_large(dsi, &brightness);
+	dsi->mode_flags = mode_flags;
 	if (ret < 0)
 		return ret;
-
-	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
 	return brightness;
 }
@@ -231,6 +276,7 @@ static int s6e8fco_samsungp_probe(struct mipi_dsi_device *dsi)
 				     "Failed to get reset-gpios\n");
 
 	ctx->dsi = dsi;
+	INIT_DELAYED_WORK(&ctx->brightness_work, s6e8fco_samsungp_brightness_work);
 	mipi_dsi_set_drvdata(dsi, ctx);
 
 	dsi->lanes = 4;
@@ -262,6 +308,8 @@ static void s6e8fco_samsungp_remove(struct mipi_dsi_device *dsi)
 {
 	struct s6e8fco_samsungp *ctx = mipi_dsi_get_drvdata(dsi);
 	int ret;
+
+	cancel_delayed_work_sync(&ctx->brightness_work);
 
 	ret = mipi_dsi_detach(dsi);
 	if (ret < 0)
