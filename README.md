@@ -1,5 +1,11 @@
 # Mi A3 6.18 external kernel modules
 
+Current source (2026-10-08): the panel uses the committed deferred 20 ms
+brightness worker. The experimental exported DSI frame-wait API and retries
+were reverted; matching kernel and freshly built panel modules remain required.
+See the companion kernel Documentation/android/DISPLAY_STARTUP.md for history
+and WIFI_REVIEW.md for the current publication and validation limits.
+
 The optional Samsung S6E8FCO panel driver is maintained under qcom/opensource/display-drivers/panel/ with its
 original license, copyright and attributed commit history. Kbuild compiles it
 only when CONFIG_DRM_PANEL_SAMSUNG_S6E8FCO=m. Its configuration dependencies
@@ -56,3 +62,25 @@ through the companion kernel's SimpleDRM fallback, but Android's display
 transition delay remains. That fallback does not bind this panel driver;
 recovery success does not validate the delayed-brightness change. No new
 device logs isolate its effect on native Android output.
+
+## Wi-Fi candidate
+
+WCN3990 board wiring belongs to the devicetrees repo; upstream ath10k and
+its vendor modules belong to the ACK kernel, not a duplicate external driver.
+Android firmware links and services belong to the ROM tree. See the companion
+kernel `Documentation/android/WIFI.md` for provenance, integration and pending
+2.4/5 GHz validation. Build #23 reaches FW_READY in QMI-only mode; full mode hangs during CE MMIO
+initialization. Wi-Fi connectivity remains unvalidated. See WIFI_REVIEW.md.
+
+## Complete display rollback, 2026-10-08
+
+Following the report of a stuck Lineage boot logo, all remaining uncommitted
+display experiments have now been restored to the committed baseline:
+DPU teardown/MMU reordering, exported DSI frame wait and panel brightness
+retry changes are removed, in addition to splash retention. The panel again
+uses the committed deferred 20 ms brightness worker. Earlier historical
+candidate descriptions above no longer describe the current source.
+Wi-Fi, recovery UI and Connectivity BPF changes remain independent.
+Archived display diffs are in out/display-revert-20261008 locally. Matching
+kernel and panel modules must be rebuilt together; no runtime fix is claimed
+until the maintainer validates.
